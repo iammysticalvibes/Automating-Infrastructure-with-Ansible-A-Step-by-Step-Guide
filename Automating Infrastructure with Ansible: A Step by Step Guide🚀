@@ -1,0 +1,316 @@
+First we have to launch Master server name it as ANSIBLE-MASTER
+
+HIMANI-MASTER-ANSIBLE (MASTER)
+
+select instance from console > Actions > Image and Templates > Launch more like this > launch 3 instances
+
+HIMANI-ANSIBLE-SERVER-1
+HIMANI-ANSIBLE-SERVER-2
+HIMANI-ANSIBLE-SERVER-3
+
+connect HIMANI-MASTER-ANSIBLE 
+
+update the instance > sudo apt update
+Install Ansible in instance > sudo apt install ansible -y
+
+move our common key to master instance to .ssh folder 
+
+KEY-PERMISSION 
+change key permission of master-ansible by cmd > chmod 700 HIMANI_key.pem
+
+make security grp ivp4 all to connect master server to ansible server
+
+sudo ssh -i ~/.ssh/HIMANI.pem ubuntu@34.204.84.232 (IPV4 of Ansible-server-1)
+
+
+Inventory (its a file while server info is stored)
+
+CMD > mkdir ansible
+
+CMD > mkdir inventory /home/ubuntu/ansible/  
+
+CMD > cd /home/ubuntu/ansible
+
+CMD > vim hosts  
+(basically we are adding the configuration of ansible-server to master-server of ansible)
+
+[SERVERS]
+server1 ansible_host=54.183.155.205
+server2 ansible_host=13.57.8.186
+server3 ansible_host=54.241.117.38
+
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3
+
+
+To-check the ansible inventory is correct or not 
+CMD > ansible-inventory --list -y -i /home/ubuntu/ansible/hosts
+
+PING 
+To check the connectivity between master server and ansible server we ping through master server
+
+CMD > ansible all -m ping -i /home/ubuntu/ansible/hosts --private-key=~/.ssh/HIMANI.pem   
+
+(If ping fails connect the failed ansible server manually)
+
+
+DISK STORAGE (To check disk storage of all the servers)
+
+CMD > ansible all -a "df -h" -i /home/ubuntu/ansible/hosts --private-key=~/.ssh/HIMANI.pem
+
+
+To update the ansible servers 
+CMD > ansible all -m apt -a "upgrade=yes update_cache=yes cache_valid_time=86400" --become -i /home/ubuntu/ansible/hosts --private-key=~/.ssh/HIMANI.pem
+
+
+PLAY-BOOKS
+
+play-book: 1
+playbook for creating file in ansible instance 
+
+Make directory cmd > CMD > mkdir PLAY-BOOKS
+cmd > cd PLAY-BOOKS/
+
+* create yml file * 
+
+CMD > vim create_file.yml
+
+
+---
+- name: This playbook will create a file
+  hosts: all
+  become: true
+  tasks:
+   - name: Create a file
+     file:
+        path: /home/ubuntu/DAVID.txt
+        state: touch
+
+
+
+Run the Playbook cmd > ansible-playbook create_file.yml -i /home/ubuntu/ansible/hosts --private-key=~/.ssh/HIMANI.pem
+
+
+
+
+
+play-book: 2
+
+create yml file cmd > vim create_user.yml
+
+
+---
+- name: This playbook will create a user
+  hosts: all
+  become: true
+  tasks:
+    - name: To create a user named trainwithshubham
+      user:
+        name: trainwithshubham
+
+
+
+
+Run the Playbook cmd > ansible-playbook create_user.yml -i /home/ubuntu/ansible/hosts --private-key=~/.ssh/HIMANI.pem
+
+
+
+cat /etc/passwd (check the user through this CMD)
+
+
+
+
+
+
+play-book: 3
+
+create yml file cmd > vim install_docker.yml
+
+
+---
+- name: This playbook will install Docker
+  hosts: all
+  become: true
+  tasks:
+    - name: Add Docker GPG apt Key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker Repository
+      apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu focal stable
+        state: present
+
+    - name: Install Docker
+      apt:
+        name: docker-ce
+        state: latest
+
+
+Run the Playbook cmd > ansible-playbook install_docker.yml -i /home/ubuntu/ansible/hosts --private-key=~/.ssh/HIMANI.pem
+
+
+
+
+
+play-book: 4
+create yml file cmd > vim install_Nginx.yml
+
+
+---
+- name: Install Nginx
+  hosts: all
+  become: true
+  tasks:
+    - name: Install Nginx package
+      package:
+        name: nginx
+        state: present
+
+Run the Playbook cmd > ansible-playbook install_Nginx.yml -i /home/ubuntu/ansible/hosts --private-key=~/.ssh/HIMANI.pem
+
+
+
+
+
+play-book: 5
+create yml file cmd > vim  install_mysql_database.yml
+
+---
+- name: Install MySQL 
+  hosts: all
+  become: true
+  tasks:
+    - name: Install MySQL Server package
+      apt:
+        name: mysql-server
+        state: present
+
+- name: Create MySQL User on Slave Server
+  hosts: all
+  become: yes
+
+  tasks:
+   - name: Install required Python MySQL library
+     package:
+        name: python3-pymysql  # or mysql-python depending on your Python version
+        state: present
+
+   - name: Set MySQL root password
+     debconf:
+        name: 'mysql-server'
+        question: 'mysql-server/root_password'
+        value: 'Admin@123'
+        vtype: 'password'
+
+   - name: Create MySQL superuser with all privileges
+     mysql_user:
+        name: 'superuser'
+        host: '%'
+        password: 'Admin@123'
+        priv: '*.*:ALL'
+        state: present
+        login_unix_socket: /run/mysqld/mysqld.sock
+
+   - name: Create MySQL database
+     mysql_db:
+        name: 'userdata'
+        state: present
+        login_unix_socket: /run/mysqld/mysqld.sock
+
+
+Run the Playbook cmd > ansible-playbook install_mysql_database.yml -i /home/ubuntu/ansible/hosts --private-key=~/.ssh/HIMANI.pem
+
+mysql -u superuser -p
+Admin@123
+sudo systemctl start mysql
+sudo systemctl status mysql
+
+
+
+
+play-book: 6
+create yml file cmd > vim  install_PostgreSQL_database.yml
+
+
+---
+- name: Install PostgreSQL Database and Create Superuser
+  hosts: your_postgres_servers
+  become: yes
+
+  vars:
+    postgres_user: your_username
+    postgres_password: your_password
+
+  tasks:
+    - name: Update apt package cache (for Debian/Ubuntu)
+      apt:
+        update_cache: yes
+      when: ansible_os_family == "Debian" or ansible_distribution == "Ubuntu"
+
+    - name: Install PostgreSQL
+      package:
+        name: postgresql
+        state: present
+
+    - name: Ensure PostgreSQL service is running and enabled
+      service:
+        name: postgresql
+        state: started
+        enabled: yes
+
+    - name: Create PostgreSQL superuser
+      postgresql_user:
+        db: postgres
+        name: "{{ Admin_user }}"
+        password: "{{ Admin@123 }}"
+        priv: superuser
+
+
+Run the Playbook cmd > ansible-playbook install_PostgreSQL_database.yml -i /home/ubuntu/ansible/hosts --private-key=~/.ssh/HIMANI.pem
+
+
+
+play-book: 7
+create yml file cmd > vim  install_java.yml
+
+---
+- name: Install Java
+  hosts: all
+  become: true
+  tasks:
+    - name: Install OpenJDK 11 on Debian-based systems
+      apt:
+        name: openjdk-11-jdk
+        state: present
+      when: ansible_os_family == 'Debian'
+
+    - name: Install OpenJDK 11 on Red Hat-based systems
+      yum:
+        name: java-11-openjdk-devel
+        state: present
+      when: ansible_os_family == 'RedHat'
+
+
+Run the Playbook cmd > ansible-playbook install_java.yml -i /home/ubuntu/ansible/hosts --private-key=~/.ssh/HIMANI.pem
+
+
+
+
+
+play-book: 8
+create yml file cmd > vim tree_install.yml
+
+---
+- name: Install tree package
+  hosts: all
+  become: true
+  tasks:
+    - name: Install tree
+      yum:
+        name: tree
+        state: present
+
+
+Run the Playbook cmd > ansible-playbook tree_install.yml -i /home/ubuntu/ansible/hosts --private-key=~/.ssh/HIMANI.pem
